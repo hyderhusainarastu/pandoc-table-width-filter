@@ -47,7 +47,7 @@ Applied to the table above:
 
 | Surface | How | Status |
 |---|---|---|
-| Pandoc CLI (LaTeX/PDF, HTML) | `--lua-filter` | LaTeX and HTML output verified by the author; no dated test record |
+| Pandoc CLI (LaTeX/PDF, HTML) | `--lua-filter` | not tested (no dated test run recorded) |
 | AI coding agents (Codex, Cursor, Claude Code, Gemini CLI, Copilot) | read `AGENTS.md`, then run the CLI | not tested |
 
 ## Quick start
@@ -96,11 +96,18 @@ This needs `pandoc` on PATH. It converts `tests/wide-table.md` to LaTeX and comp
 
 ## Limitations
 
-- Only affects tables Pandoc represents with per-column width fractions (`ColWidth`) on the AST `Table` element. It has been verified to take effect in the **LaTeX** writer (`-t latex`, and therefore any LaTeX-based PDF build) and the **HTML** writer (`-t html`), both of which render the resulting `colwidth` values. Writers that don't honor per-column widths — e.g. round-tripping back to Markdown/GFM (`-t gfm`, `-t markdown`) — silently ignore the change, so this filter has no visible effect on Markdown-to-Markdown conversions.
+- Only affects tables Pandoc represents with per-column width fractions (`ColWidth`) on the AST `Table` element. It is expected to take effect in the **LaTeX** writer (`-t latex`, and therefore any LaTeX-based PDF build) and the **HTML** writer (`-t html`), both of which render `colwidth` values; no dated test run is recorded for either. Writers that don't honor per-column widths — e.g. round-tripping back to Markdown/GFM (`-t gfm`, `-t markdown`) — silently ignore the change, so this filter has no visible effect on Markdown-to-Markdown conversions.
 - Tables with only one column are left untouched (`return nil`), since there's nothing to redistribute.
 - The character-based width estimate (`CHARS_FULL = 90` characters per full line width) is a rough heuristic tuned for an 11pt Latin Modern-style body font. If your document uses a very different font size or a monospace/CJK font, the resulting proportions will be less accurate — the algorithm will still avoid squeezing a column below its longest word, but the "prose volume" weighting may be off.
 - Table captions, footnotes, and merged/spanning cells are not specially accounted for; the filter measures each cell's own text independently.
 - This is a heuristic, not a proof: on pathological inputs (a single column holding an extremely long atom, e.g. a long unbroken URL or code token) the minimum-width safety clamp (`ABS_MAX_FRAC = 0.55`) can still leave a table looking uneven. It fixes the common case, not every case.
+
+## How it differs
+
+- **Pandoc's own column handling.** For a pipe table, Pandoc takes relative column widths from the dashes in the separator row, and only when some row is longer than the column limit. With the minimal `|---|---|` separator every column gets the same share. Nothing in core Pandoc looks at cell text to choose widths.
+- **`--columns`.** This sets the line length in characters used for wrapping and for that long-row check. It does not change how the width shares are derived, so it cannot fix an equal split.
+- **Editing the separator row by hand.** Adding dashes in proportion works, but it needs a change to every table in the source. This filter needs no change to the Markdown.
+- **Other column-width Lua filters.** Filters that size columns purely in proportion to character count can squeeze a short column below its longest word. This one reserves each column's longest unbreakable run first and shares the remainder by content volume. I have not benchmarked it against specific other filters.
 
 ## How it works, briefly
 
