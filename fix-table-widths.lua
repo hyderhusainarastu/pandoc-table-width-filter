@@ -41,6 +41,26 @@ local ATOM_PAD = 2.0      -- small buffer so an atom isn't flush against cell pa
 local ABS_MIN_FRAC = 0.045
 local ABS_MAX_FRAC = 0.55
 
+-- Optional overrides from document metadata (or `-M name=value` on the
+-- command line). Invalid or out-of-range values are ignored.
+--   table-width-chars-full    characters per full line width (number > 10)
+--   table-width-abs-max-frac  cap on any column minimum, 0.2 to 0.95
+local function meta_number(meta, key)
+  local v = meta[key]
+  if v == nil then return nil end
+  local ok, s = pcall(pandoc.utils.stringify, v)
+  if not ok then return nil end
+  return tonumber(s)
+end
+
+local function read_meta(meta)
+  local cf = meta_number(meta, "table-width-chars-full")
+  if cf and cf > 10 then CHARS_FULL = cf end
+  local mf = meta_number(meta, "table-width-abs-max-frac")
+  if mf and mf >= 0.2 and mf <= 0.95 then ABS_MAX_FRAC = mf end
+  return nil
+end
+
 local function cell_text(cell)
   local ok, s = pcall(pandoc.utils.stringify, cell.contents)
   if not ok or not s then return "" end
@@ -142,7 +162,7 @@ local function water_fill(weights, mins, n)
   return width
 end
 
-function Table(tbl)
+local function Table(tbl)
   local ncols = #tbl.colspecs
   if ncols < 2 then return nil end
 
@@ -210,3 +230,10 @@ function Table(tbl)
 
   return tbl
 end
+
+-- Two passes: metadata is read first, because Pandoc's default traversal
+-- would otherwise visit Table elements before Meta.
+return {
+  { Meta = read_meta },
+  { Table = Table },
+}
